@@ -5,19 +5,31 @@ import java.util.Objects;
 public class ScrappedMemeInfo {
 
     private final String id;
-    private final String picId;
+    private final String title;
+    private final ScrappedContent content;
+    private final int rating;
 
-    public ScrappedMemeInfo(String id, String picId) {
+    public ScrappedMemeInfo(String id, String title, ScrappedContent content, int rating) {
         this.id = id;
-        this.picId = picId;
+        this.title = title;
+        this.content = content;
+        this.rating = rating;
     }
 
     public String getId() {
         return id;
     }
 
-    public String getPicId() {
-        return picId;
+    public String getTitle() {
+        return title;
+    }
+
+    public ScrappedContent getContent() {
+        return content;
+    }
+
+    public int getRating() {
+        return rating;
     }
 
     @Override
@@ -25,12 +37,14 @@ public class ScrappedMemeInfo {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
         ScrappedMemeInfo that = (ScrappedMemeInfo) o;
-        return Objects.equals(id, that.id) &&
-                Objects.equals(picId, that.picId);
+        return rating == that.rating &&
+                Objects.equals(id, that.id) &&
+                Objects.equals(title, that.title) &&
+                Objects.equals(content, that.content);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(id, picId);
+        return Objects.hash(id, title, content, rating);
     }
 }
