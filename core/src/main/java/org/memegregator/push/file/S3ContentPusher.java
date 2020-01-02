@@ -43,7 +43,7 @@ public class S3ContentPusher implements ContentPusher {
 
 
     @Override
-    public Mono<Void> pushData(String filename, Flux<DataBuffer> data) {
+    public Mono<Void> pushData(String filename, Flux<byte[]> data) {
         S3UploadContext uploadContext = new S3UploadContext(s3, bucketName, filename);
         return data
                 .publishOn(Schedulers.boundedElastic())

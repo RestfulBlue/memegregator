@@ -7,6 +7,6 @@ import reactor.core.publisher.Mono;
 
 public interface ContentPusher {
 
-    Mono<Void> pushData(String key, Flux<DataBuffer> stream);
+    Mono<Void> pushData(String key, Flux<byte[]> stream);
 
 }

@@ -5,9 +5,7 @@ import com.amazonaws.services.s3.model.*;
 import org.springframework.core.io.buffer.DataBuffer;
 import org.springframework.core.io.buffer.DataBufferUtils;
 
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.SequenceInputStream;
+import java.io.*;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.locks.ReentrantLock;
@@ -23,8 +21,7 @@ public class S3UploadContext {
     private final String bucket;
     private final String key;
 
-    private List<DataBuffer> buffers = new ArrayList<>();
-    private InputStream inputStream;
+    private ByteArrayOutputStream outputStream;
     private int currentSize;
 
     private List<PartETag> tags;
@@ -41,24 +38,22 @@ public class S3UploadContext {
     }
 
 
-    public void processPart(DataBuffer buffer) {
+    public void processPart(byte[] buffer) {
         try {
             reentrantLock.lock();
-            buffers.add(buffer);
-            if (inputStream == null) {
-                inputStream = buffer.asInputStream();
-            } else {
-                inputStream = new SequenceInputStream(inputStream, buffer.asInputStream());
-            }
 
-            currentSize += buffer.readableByteCount();
+            if(outputStream == null){
+                outputStream = new ByteArrayOutputStream(buffer.length);
+            }
+            outputStream.write(buffer);
+            currentSize += buffer.length;
 
             if (currentSize > MAX_BYTES_TO_BUFFER) {
                 if (initialRequest == null) {
                     initiateMultipartUpload();
                 }
                 sendCurrentAsMultipart();
-                inputStream = null;
+                outputStream = null;
                 currentSize = 0;
             }
         } catch (Exception e) {
@@ -73,7 +68,7 @@ public class S3UploadContext {
             reentrantLock.lock();
             // if request initialized it means we are using a multipart upload
             if (initialRequest != null) {
-                if (inputStream != null) {
+                if (outputStream != null) {
                     sendCurrentAsMultipart();
                 }
                 finalizeMultipartUpload();
@@ -84,9 +79,6 @@ public class S3UploadContext {
         } catch (Exception e) {
             throw new IllegalStateException(e);
         } finally {
-            for (DataBuffer buffer : buffers) {
-                DataBufferUtils.releaseConsumer().accept(buffer);
-            }
             reentrantLock.unlock();
         }
     }
@@ -104,7 +96,7 @@ public class S3UploadContext {
                 .withUploadId(initialResult.getUploadId())
                 .withPartSize(currentSize)
                 .withPartNumber(position++)
-                .withInputStream(inputStream);
+                .withInputStream(new ByteArrayInputStream(outputStream.toByteArray()));
 
         UploadPartResult result = s3Client.uploadPart(request);
         tags.add(result.getPartETag());
@@ -118,6 +110,6 @@ public class S3UploadContext {
     private void sendCurrentAsSingle() {
         ObjectMetadata metadata = new ObjectMetadata();
         metadata.setContentLength(currentSize);
-        s3Client.putObject(bucket, key, inputStream, metadata);
+        s3Client.putObject(bucket, key, new ByteArrayInputStream(outputStream.toByteArray()), metadata);
     }
 }
