@@ -1,29 +1,24 @@
 package org.memegregator.coordinator.configuration;
 
+import com.mongodb.reactivestreams.client.ClientSession;
 import com.mongodb.reactivestreams.client.MongoClient;
 import com.mongodb.reactivestreams.client.MongoClients;
+import com.mongodb.reactivestreams.client.MongoDatabase;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
-import org.springframework.data.mongodb.config.AbstractMongoClientConfiguration;
-import org.springframework.data.mongodb.config.AbstractReactiveMongoConfiguration;
-import org.springframework.data.mongodb.core.ReactiveMongoTemplate;
-import org.springframework.data.mongodb.repository.config.EnableReactiveMongoRepositories;
+import org.springframework.stereotype.Component;
 
-@EnableReactiveMongoRepositories
-public class MongoConfiguration extends AbstractReactiveMongoConfiguration {
+@Component
+public class MongoConfiguration {
 
-    @Override
-    public MongoClient reactiveMongoClient() {
+    @Bean
+    public MongoClient mongoClient() {
         return MongoClients.create();
     }
 
-    @Override
-    protected String getDatabaseName() {
-        return "memegregator";
-    }
-
     @Bean
-    public ReactiveMongoTemplate template(MongoClient client){
-        return new ReactiveMongoTemplate(client, getDatabaseName());
+    public MongoDatabase database(@Value("${mongo.databaseName}") String databaseName) {
+        return mongoClient().getDatabase(databaseName);
     }
 
 }

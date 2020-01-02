@@ -1,6 +1,5 @@
 package org.memegregator.coordinator.indexing;
 
-import org.memegregator.coordinator.entity.Offset;
 import org.memegregator.coordinator.service.OffsetService;
 import org.springframework.stereotype.Component;
 
@@ -16,7 +15,7 @@ public class IndexRunner implements Runnable {
 
     @Override
     public void run() {
-        offsetService.saveOffset(new Offset("debasto", 0)).block();
-        offsetService.findOffset("qwe123").log().subscribe();
+        offsetService.saveOffset("debasto", 0).block();
+        offsetService.findOffset("debasto").log().block();
     }
 }

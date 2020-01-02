@@ -1,29 +1,46 @@
 package org.memegregator.coordinator.service;
 
-import org.memegregator.coordinator.entity.Offset;
+import com.mongodb.reactivestreams.client.MongoClient;
+import com.mongodb.reactivestreams.client.MongoDatabase;
+import com.mongodb.reactivestreams.client.Success;
+import org.bson.Document;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.data.mongodb.core.ReactiveMongoTemplate;
-import org.springframework.data.mongodb.core.query.Query;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
-import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+
+import static com.mongodb.client.model.Filters.eq;
 
 @Component
 public class OffsetService {
 
-    private final ReactiveMongoTemplate mongoTemplate;
+    private final String offsetCollection;
+    private final MongoDatabase database;
+    private final MongoClient mongoClient;
 
     @Autowired
-    public OffsetService(ReactiveMongoTemplate mongoTemplate){
-        this.mongoTemplate = mongoTemplate;
+    public OffsetService(
+            MongoClient mongoClient,
+            MongoDatabase mongoDatabase,
+            @Value("${mongo.offsetCollection:offsets}") String offsetCollection) {
+        this.database = mongoDatabase;
+        this.mongoClient = mongoClient;
+        this.offsetCollection = offsetCollection;
     }
 
-    public Mono<Void> saveOffset(Offset offset){
-        return mongoTemplate.save(offset).then();
+    public Mono<Success> saveOffset(String systemName, long offset) {
+        return Mono.from(database
+                .getCollection(offsetCollection)
+                .insertOne(new Document("system", systemName).append("offset", offset))
+        );
     }
 
-    public Flux<Offset> findOffset(String service){
-        return mongoTemplate.findAll(Offset.class);
+    public Mono<String> findOffset(String systemName) {
+        return Mono.from(database
+                .getCollection(offsetCollection)
+                .find(eq("system", systemName))
+                .first()
+        ).map(document -> document.getString("system"));
     }
 
 
