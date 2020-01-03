@@ -2,7 +2,7 @@ package org.memegregator.entity.content;
 
 import java.util.Objects;
 
-public class ExternalImageContent implements MemeContent {
+public class ExternalImageContent implements ExternalMemeContent {
     private final String imageUrl;
 
     public ExternalImageContent(String imageUrl) {

@@ -2,7 +2,7 @@ package org.memegregator.entity.content;
 
 import java.util.Objects;
 
-public class ExternalVideoContent implements MemeContent {
+public class ExternalVideoContent implements ExternalMemeContent {
     private final String videoUrl;
     private final String posterUrl;
 

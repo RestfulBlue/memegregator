@@ -2,7 +2,7 @@ package org.memegregator.entity.content;
 
 import java.util.Objects;
 
-public class S3VideoContent implements MemeContent {
+public class S3VideoContent implements InternalMemeContent {
 
     private final String fileKey;
     private final String posterKey;

@@ -2,7 +2,7 @@ package org.memegregator.entity.content;
 
 import java.util.Objects;
 
-public class S3ImageContent implements MemeContent {
+public class S3ImageContent implements InternalMemeContent {
 
     private final String imageKey;
 
