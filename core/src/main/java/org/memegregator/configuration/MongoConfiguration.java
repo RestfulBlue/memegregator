@@ -10,14 +10,14 @@ import org.springframework.stereotype.Component;
 @Component
 public class MongoConfiguration {
 
-    @Bean
-    public MongoClient mongoClient() {
-        return MongoClients.create();
-    }
+  @Bean
+  public MongoClient mongoClient() {
+    return MongoClients.create();
+  }
 
-    @Bean
-    public MongoDatabase database(@Value("${mongo.databaseName}") String databaseName) {
-        return mongoClient().getDatabase(databaseName);
-    }
+  @Bean
+  public MongoDatabase database(@Value("${mongo.databaseName}") String databaseName) {
+    return mongoClient().getDatabase(databaseName);
+  }
 
 }

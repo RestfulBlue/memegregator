@@ -9,19 +9,17 @@ import reactor.core.publisher.Flux;
 @Component
 public class MongoPublisher implements Publisher {
 
-    private final MemeService memeService;
+  private final MemeService memeService;
 
-    @Autowired
-    public MongoPublisher(MemeService memeService) {
-        this.memeService = memeService;
-    }
+  @Autowired
+  public MongoPublisher(MemeService memeService) {
+    this.memeService = memeService;
+  }
 
-    @Override
-    public void publishMemes(Flux<MemeInfo> memeStream) {
-        memeStream
-                .doOnNext((next) -> {
-                    memeService.saveMeme(next).subscribe();
-                })
-                .subscribe();
-    }
+  @Override
+  public void publishMemes(Flux<MemeInfo> memeStream) {
+    memeStream
+        .flatMap(memeService::saveMeme)
+        .subscribe();
+  }
 }

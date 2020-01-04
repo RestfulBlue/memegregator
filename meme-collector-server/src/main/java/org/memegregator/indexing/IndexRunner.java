@@ -12,15 +12,15 @@ import reactor.core.publisher.Flux;
 public class IndexRunner {
 
 
-    @Autowired
-    public IndexRunner(
-            Scrapper scrapper,
-            Collector collector,
-            Publisher publisher
-    ) {
-        Flux<MemeInfo> memeStream = scrapper.getScrappingStream();
-        Flux<MemeInfo> collectedMemes = collector.collectMemes(memeStream);
-        publisher.publishMemes(collectedMemes);
-    }
+  @Autowired
+  public IndexRunner(
+      Scrapper scrapper,
+      Collector collector,
+      Publisher publisher
+  ) {
+    Flux<MemeInfo> memeStream = scrapper.getScrappingStream().metrics();
+    Flux<MemeInfo> collectedMemes = collector.collectMemes(memeStream);
+    publisher.publishMemes(collectedMemes);
+  }
 
 }
