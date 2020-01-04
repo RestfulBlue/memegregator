@@ -1,4 +1,4 @@
-package org.memegregator.push.file;
+package org.memegregator.storage;
 
 import com.amazonaws.auth.AWSCredentials;
 import com.amazonaws.auth.AWSStaticCredentialsProvider;
@@ -8,14 +8,13 @@ import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.AmazonS3ClientBuilder;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.core.io.buffer.DataBuffer;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
 
 @Component
-public class S3ContentPusher implements ContentPusher {
+public class S3ContentStorage implements ContentStorage {
 
     private final String secretKey;
     private final String accessKey;
@@ -24,7 +23,7 @@ public class S3ContentPusher implements ContentPusher {
     private final AmazonS3 s3;
 
     @Autowired
-    public S3ContentPusher(
+    public S3ContentStorage(
             @Value("${aws.secretKey}") String secretKey,
             @Value("${aws.accessKey}") String accessKey,
             @Value("${s3.bucketName}") String bucketName

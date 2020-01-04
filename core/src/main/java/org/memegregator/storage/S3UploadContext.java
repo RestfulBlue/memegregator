@@ -1,4 +1,4 @@
-package org.memegregator.push.file;
+package org.memegregator.storage;
 
 import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.model.*;
@@ -64,6 +64,9 @@ public class S3UploadContext {
     }
 
     public void finishUpload() {
+        if(outputStream == null){
+            return;
+        }
         try {
             reentrantLock.lock();
             // if request initialized it means we are using a multipart upload

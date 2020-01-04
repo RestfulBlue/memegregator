@@ -8,14 +8,13 @@ import org.memegregator.entity.MemeInfo;
 import org.memegregator.entity.content.ExternalImageContent;
 import org.memegregator.entity.content.ExternalVideoContent;
 import org.memegregator.entity.content.MemeContent;
+import org.memegregator.puller.HttpPuller;
 import org.memegregator.scrappers.Scrapper;
 import org.memegregator.service.OffsetService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Import;
-import org.springframework.http.HttpMethod;
 import org.springframework.stereotype.Component;
-import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.FluxSink;
 import reactor.core.publisher.Mono;
@@ -25,24 +24,25 @@ import java.util.List;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.locks.ReentrantLock;
 
 @Component
 @Import(OffsetService.class)
 public class DebesteScrapper implements Scrapper {
 
+    private static final String PROVIDER_KEY = "DEBESTE";
+    private final HttpPuller httpPuller;
 
     private final OffsetService offsetService;
     private final String host;
-    private final WebClient webClient;
 
     @Autowired
-    public DebesteScrapper(OffsetService offsetService, @Value("${host:debasto.de}") String host) {
+    public DebesteScrapper(OffsetService offsetService,
+                           HttpPuller httpPuller,
+                           @Value("${host:http://debeste.de}") String host) {
         this.host = host;
         this.offsetService = offsetService;
-        webClient = WebClient.builder()
-                .baseUrl("http://debeste.de")
-                .build();
-
+        this.httpPuller = httpPuller;
     }
 
 
@@ -50,7 +50,7 @@ public class DebesteScrapper implements Scrapper {
         private final FluxSink<MemeInfo> sink;
         private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1);
 
-//        private final ReentrantLock reentrantLock = new ReentrantLock();
+        private final ReentrantLock reentrantLock = new ReentrantLock();
 
 
         private volatile int currentPage = 1;
@@ -68,14 +68,14 @@ public class DebesteScrapper implements Scrapper {
 
         private void runScrapping() {
 
-//            reentrantLock.lock();
+            reentrantLock.lock();
             if (collectInProgress) {
                 return;
             }
-//            reentrantLock.unlock();
+            reentrantLock.unlock();
 
             collectPage(currentPage++)
-                    .map(DebesteScrapper::extractMemesFromHtml)
+                    .map(DebesteScrapper.this::extractMemesFromHtml)
                     .subscribe(list -> {
                         int pageMax = Integer.MIN_VALUE;
                         for (MemeInfo info : list) {
@@ -85,13 +85,14 @@ public class DebesteScrapper implements Scrapper {
                             pageMax = Math.max(pageMax, info.getId());
                         }
 
-//                        reentrantLock.lock();
+                        reentrantLock.lock();
                         memesToCollect = memesToCollect > list.size() ? memesToCollect - list.size() : 0;
                         if (memesToCollect == 0) {
                             collectInProgress = false;
+                            reentrantLock.unlock();
                             return;
                         }
-//                        reentrantLock.unlock();
+                        reentrantLock.unlock();
 
 
                         if (pageMax > endOfsset) {
@@ -115,31 +116,35 @@ public class DebesteScrapper implements Scrapper {
         }
 
         public void processMemeRequest(long n) {
-//            reentrantLock.lock();
+            reentrantLock.lock();
             memesToCollect += n;
-//            reentrantLock.unlock();
+            reentrantLock.unlock();
             runScrapping();
         }
 
         @Override
         public void run() {
-//                reentrantLock.lock();
-            if (offsetScheduled) {
-//                    reentrantLock.unlock();
-                return;
+            try {
+                reentrantLock.lock();
+                if (offsetScheduled) {
+                    reentrantLock.unlock();
+                    return;
+                }
+
+                offsetService.findOffset("debeste")
+                        .defaultIfEmpty(0)
+                        .handle((targetOffset, sink) -> {
+                            this.endOfsset = targetOffset;
+                            offsetScheduled = true;
+                            currentPage = 1;
+
+                            sink.complete();
+                        })
+                        .block();
+            } finally {
+                reentrantLock.unlock();
             }
 
-            offsetService.findOffset("debeste")
-                    .defaultIfEmpty(0)
-                    .handle((targetOffset, sink) -> {
-                        this.endOfsset = targetOffset;
-                        offsetScheduled = true;
-                        currentPage = 1;
-
-                        sink.complete();
-                    })
-//                        .doFinally((signal) -> reentrantLock.unlock())
-                    .subscribe();
         }
     }
 
@@ -152,14 +157,10 @@ public class DebesteScrapper implements Scrapper {
     }
 
     private Mono<String> collectPage(int page) {
-        return webClient.method(HttpMethod.GET)
-                .uri("/" + page)
-                .exchange()
-                .flatMap(response -> response.bodyToMono(String.class));
+        return httpPuller.pullAsMono(host + "/" + page, String.class);
     }
 
-
-    private static List<MemeInfo> extractMemesFromHtml(String html) {
+    private List<MemeInfo> extractMemesFromHtml(String html) {
 
         Document doc = Jsoup.parse(html);
         Elements boxs = doc.getElementById("content").getElementsByClass("box");
@@ -199,11 +200,11 @@ public class DebesteScrapper implements Scrapper {
                 String url = imageBox.getElementsByTag("a").first()
                         .getElementsByTag("img").first()
                         .attr("src");
-                content = new ExternalImageContent(url);
+                content = new ExternalImageContent(host + "/" + url);
             } else if (videoBox != null) {
                 Element videoElement = videoBox.children().first().getElementsByTag("video").first();
-                String videoUrl = videoElement.attr("src");
-                String posterUrl = videoElement.attr("poster");
+                String videoUrl = host + "/" + videoElement.children().first().attr("src");
+                String posterUrl = host + "/" + videoElement.attr("poster");
                 content = new ExternalVideoContent(videoUrl, posterUrl);
             }
 
@@ -216,7 +217,7 @@ public class DebesteScrapper implements Scrapper {
                 }
             }
 
-            infos.add(new MemeInfo(Integer.parseInt(id), title, content, rating));
+            infos.add(new MemeInfo(Integer.parseInt(id), PROVIDER_KEY, title, content, rating));
         }
 
         return infos;

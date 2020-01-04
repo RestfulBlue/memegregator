@@ -1,11 +1,11 @@
-package org.memegregator.push.file;
+package org.memegregator.storage;
 
 import org.springframework.core.io.buffer.DataBuffer;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 
-public interface ContentPusher {
+public interface ContentStorage {
 
     Mono<Void> pushData(String key, Flux<byte[]> stream);
 
