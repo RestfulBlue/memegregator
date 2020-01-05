@@ -8,12 +8,13 @@ import reactor.core.publisher.Flux;
 
 
 @JsonTypeInfo(
-        use = JsonTypeInfo.Id.NAME,
-        include = JsonTypeInfo.As.PROPERTY,
-        property = "type")
+    use = JsonTypeInfo.Id.NAME,
+    include = JsonTypeInfo.As.PROPERTY,
+    property = "type")
 @JsonSubTypes({
-        @JsonSubTypes.Type(value = DebesteScrapper.class, name = "debeste"),
+    @JsonSubTypes.Type(value = DebesteScrapper.class, name = "debeste"),
 })
 public interface Scrapper {
-    Flux<MemeInfo> getScrappingStream();
+
+  Flux<MemeInfo> getScrappingStream();
 }

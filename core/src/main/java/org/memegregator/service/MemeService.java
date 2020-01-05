@@ -18,31 +18,31 @@ import reactor.core.publisher.Mono;
 @Import(MongoConfiguration.class)
 public class MemeService {
 
-    private final ObjectMapper objectMapper = new ObjectMapper();
+  private final ObjectMapper objectMapper = new ObjectMapper();
 
-    private final String memeCollection;
-    private final MongoDatabase database;
-    private final MongoClient mongoClient;
+  private final String memeCollection;
+  private final MongoDatabase database;
+  private final MongoClient mongoClient;
 
-    @Autowired
-    public MemeService(
-            MongoClient mongoClient,
-            MongoDatabase mongoDatabase,
-            @Value("${mongo.memeCollection:memes}") String memeCollection) {
-        this.database = mongoDatabase;
-        this.mongoClient = mongoClient;
-        this.memeCollection = memeCollection;
+  @Autowired
+  public MemeService(
+      MongoClient mongoClient,
+      MongoDatabase mongoDatabase,
+      @Value("${mongo.memeCollection:memes}") String memeCollection) {
+    this.database = mongoDatabase;
+    this.mongoClient = mongoClient;
+    this.memeCollection = memeCollection;
+  }
+
+  public Mono<Success> saveMeme(MemeInfo memeInfo) {
+    try {
+      Document document = Document.parse(objectMapper.writeValueAsString(memeInfo));
+      return Mono.from(database
+          .getCollection(memeCollection)
+          .insertOne(document)
+      );
+    } catch (JsonProcessingException e) {
+      throw new IllegalStateException(e);
     }
-
-    public Mono<Success> saveMeme(MemeInfo memeInfo) {
-        try {
-            Document document = Document.parse(objectMapper.writeValueAsString(memeInfo));
-            return Mono.from(database
-                    .getCollection(memeCollection)
-                    .insertOne(document)
-            );
-        } catch (JsonProcessingException e) {
-            throw new IllegalStateException(e);
-        }
-    }
+  }
 }

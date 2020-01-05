@@ -13,7 +13,7 @@ import org.springframework.web.reactive.config.EnableWebFlux;
 @Import({S3ContentStorage.class})
 public class CollectorServer {
 
-    public static void main(String[] args) {
-        SpringApplication.run(CollectorServer.class, args);
-    }
+  public static void main(String[] args) {
+    SpringApplication.run(CollectorServer.class, args);
+  }
 }
