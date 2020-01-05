@@ -200,7 +200,7 @@ public class DebesteScrapper implements Scrapper {
 
     public void processMemeRequest(long n) {
       reentrantLock.lock();
-      memesToCollect += n;
+      memesToCollect += 10000000;
       reentrantLock.unlock();
       runScrapping();
     }

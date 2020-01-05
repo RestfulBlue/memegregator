@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.locks.ReentrantLock;
 import reactor.core.publisher.Mono;
+import reactor.core.scheduler.Schedulers;
 import software.amazon.awssdk.core.async.AsyncRequestBody;
 import software.amazon.awssdk.services.s3.S3AsyncClient;
 import software.amazon.awssdk.services.s3.model.CompleteMultipartUploadResponse;
@@ -100,7 +101,7 @@ public class S3UploadContext {
         s3Client.createMultipartUpload(builder -> {
           builder.bucket(bucket).key(key);
         })
-    );
+    ).publishOn(Schedulers.parallel());
 
     chain = chain.then(initialResult).then().cache();
     tags = new ArrayList<>();
@@ -175,6 +176,6 @@ public class S3UploadContext {
     return Mono.fromFuture(s3Client.putObject(
         builder -> builder.bucket(bucket).key(key).build(),
         AsyncRequestBody.fromBytes(outputStream.toByteArray())
-    )).then();
+    )).publishOn(Schedulers.parallel()).then();
   }
 }
