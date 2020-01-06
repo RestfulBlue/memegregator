@@ -6,8 +6,6 @@
   <packaging>pom</packaging>
   <modules>
     <module>core</module>
-    <module>worker</module>
-    <module>coordinator</module>
     <module>meme-collector-server</module>
   </modules>
   <parent>
