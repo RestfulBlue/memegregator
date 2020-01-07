@@ -1,18 +1,22 @@
 package org.memegregator.service;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
+import static com.mongodb.client.model.Filters.gt;
+import static com.mongodb.client.model.Filters.lt;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.mongodb.BasicDBObject;
+import com.mongodb.operation.OrderBy;
 import com.mongodb.reactivestreams.client.MongoClient;
 import com.mongodb.reactivestreams.client.MongoDatabase;
-import com.mongodb.reactivestreams.client.Success;
 import org.bson.Document;
+import org.bson.conversions.Bson;
+import org.bson.types.ObjectId;
 import org.memegregator.configuration.MongoConfiguration;
-import org.memegregator.entity.MemeInfo;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Import;
 import org.springframework.stereotype.Component;
-import reactor.core.publisher.Mono;
+import reactor.core.publisher.Flux;
 
 @Component
 @Import(MongoConfiguration.class)
@@ -34,15 +38,23 @@ public class MemeService {
     this.memeCollection = memeCollection;
   }
 
-  public Mono<Success> saveMeme(MemeInfo memeInfo) {
-    try {
-      Document document = Document.parse(objectMapper.writeValueAsString(memeInfo));
-      return Mono.from(database
-          .getCollection(memeCollection)
-          .insertOne(document)
-      );
-    } catch (JsonProcessingException e) {
-      throw new IllegalStateException(e);
-    }
+  public Flux<String> listMemes(int limit) {
+    return listMemes(new Document(), OrderBy.DESC, limit);
+  }
+
+  public Flux<String> listMemes(String startId, int limit) {
+    return listMemes(lt("_id",  new ObjectId(startId)), OrderBy.DESC, limit);
+  }
+
+  public Flux<String> listMemes(String startId, OrderBy orderBy, int limit) {
+    return listMemes(lt("_id", new ObjectId(startId)), orderBy, limit);
+  }
+
+  private Flux<String> listMemes(Bson query, OrderBy orderBy, int limit) {
+    return Flux.from(database.getCollection(memeCollection)
+        .find(query)
+        .sort(new BasicDBObject("_id", orderBy.getIntRepresentation()))
+        .limit(limit))
+        .map(Document::toJson);
   }
 }

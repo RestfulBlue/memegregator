@@ -7,6 +7,7 @@ import reactor.core.publisher.Mono;
 
 public interface ContentStorage {
 
-  Mono<Void> pushData(String key, Mono<ClientResponse> response);
+  Mono<String> pushData(String key, Mono<ClientResponse> response);
 
+  Mono<Void> dropData(String key);
 }

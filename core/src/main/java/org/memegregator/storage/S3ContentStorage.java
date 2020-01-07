@@ -1,8 +1,12 @@
 package org.memegregator.storage;
 
 import java.nio.ByteBuffer;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.Base64;
 import java.util.Optional;
 import java.util.OptionalLong;
+import java.util.concurrent.locks.ReentrantLock;
 import org.reactivestreams.Subscriber;
 import org.reactivestreams.Subscription;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -25,8 +29,6 @@ import software.amazon.awssdk.services.s3.S3AsyncClient;
 public class S3ContentStorage implements ContentStorage {
 
   private final String bucketName;
-
-
   private final S3AsyncClient s3AsyncClient;
 
   @Autowired
@@ -34,7 +36,7 @@ public class S3ContentStorage implements ContentStorage {
       @Value("${aws.secretKey}") String secretKey,
       @Value("${aws.accessKey}") String accessKey,
       @Value("${s3.bucketName}") String bucketName
-  ) {
+  ) throws NoSuchAlgorithmException {
     this.bucketName = bucketName;
     AwsCredentialsProvider creds = StaticCredentialsProvider.create(new AwsCredentials() {
       @Override
@@ -57,13 +59,17 @@ public class S3ContentStorage implements ContentStorage {
 
 
   @Override
-  public Mono<Void> pushData(String filename, Mono<ClientResponse> responseMono) {
+  public Mono<String> pushData(String filename, Mono<ClientResponse> responseMono) {
+
     return responseMono.flatMap(clientResponse -> {
       OptionalLong optionalLong = clientResponse.headers().contentLength();
       if (!optionalLong.isPresent()) {
         throw new IllegalStateException(
             "Response from server don't contain length information, streaming isn't possible");
       }
+
+      MessageDigest messageDigest = getMessageDigest();
+      ReentrantLock reentrantLock = new ReentrantLock(true);
 
       return Mono.fromFuture(s3AsyncClient.putObject(
           builder -> builder.bucket(bucketName).key(filename).build(),
@@ -98,10 +104,13 @@ public class S3ContentStorage implements ContentStorage {
 
                     @Override
                     protected void hookOnNext(DataBuffer value) {
+                      reentrantLock.lock();
                       byte[] data = new byte[value.readableByteCount()];
                       value.read(data);
+                      messageDigest.update(data, 0, data.length);
                       producerBodySubscriber.onNext(ByteBuffer.wrap(data));
                       DataBufferUtils.release(value);
+                      reentrantLock.unlock();
                     }
 
                     @Override
@@ -122,8 +131,23 @@ public class S3ContentStorage implements ContentStorage {
                   });
             }
           }
-      )).then();
+      )).then(Mono.fromCallable(() -> new String(Base64.getEncoder().encode(messageDigest.digest()))));
     });
   }
 
+  @Override
+  public Mono<Void> dropData(String key) {
+    return Mono.fromFuture(s3AsyncClient.deleteObject(builder -> {
+      builder.bucket(bucketName).key(key).build();
+    })).then();
+  }
+
+
+  private MessageDigest getMessageDigest(){
+    try {
+      return MessageDigest.getInstance("MD5");
+    }catch (Exception e){
+      throw new IllegalStateException(e);
+    }
+  }
 }

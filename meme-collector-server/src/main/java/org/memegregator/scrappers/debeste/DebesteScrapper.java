@@ -1,8 +1,12 @@
 package org.memegregator.scrappers.debeste;
 
+import java.time.Duration;
+import java.util.Collections;
+import java.util.List;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.locks.ReentrantLock;
+import org.memegregator.entity.DebesteOffset;
 import org.memegregator.entity.MemeInfo;
 import org.memegregator.puller.WebClientPuller;
 import org.memegregator.scrappers.Scrapper;
@@ -22,7 +26,6 @@ import reactor.core.scheduler.Schedulers;
 @Import(OffsetService.class)
 public class DebesteScrapper implements Scrapper {
 
-  private static final String PROVIDER_KEY = "DEBESTE";
   private static final Logger LOGGER = LoggerFactory.getLogger(DebesteScrapper.class);
   private final WebClientPuller puller;
 
@@ -33,10 +36,18 @@ public class DebesteScrapper implements Scrapper {
   private volatile int scheduledDrains = 0;
   private volatile long demand = 0;
 
+  // scheduling context
   private final BlockingQueue<Mono<Void>> chain = new ArrayBlockingQueue<>(300);
   private final BlockingQueue<MemeInfo> blockingQueue = new ArrayBlockingQueue(1000);
-  private volatile int currentPage = 1;
   private volatile FluxSink<MemeInfo> memeSink;
+
+
+  private volatile int currentPage = 1;
+  private volatile int endOffset = 0;
+
+  private volatile int checkpointOffset;
+  private volatile int maxPageOffset = Integer.MIN_VALUE;
+  private volatile boolean endReached = false;
 
   @Autowired
   public DebesteScrapper(OffsetService offsetService,
@@ -44,13 +55,28 @@ public class DebesteScrapper implements Scrapper {
     this.host = host;
     this.offsetService = offsetService;
     this.puller = new WebClientPuller();
+
+    DebesteOffset defaultOffset = new DebesteOffset();
+    defaultOffset.setCheckpointOffset(0);
+    defaultOffset.setCommittedOffset(0);
+    defaultOffset.setCheckpointedPage(1);
+    defaultOffset.setCommitted(false);
+
+    addToChain(offsetService
+        .findOffset("debeste")
+        .defaultIfEmpty(defaultOffset)
+        .flatMap((offset) -> {
+          return initFromOffset((DebesteOffset) offset);
+        })
+        .then()
+    );
   }
 
 
   private void addToChain(Mono<Void> mono) {
     lock.lock();
     chain.add(mono);
-    if(chain.size() == 1){
+    if (chain.size() == 1) {
       dispatchNext();
     }
     lock.unlock();
@@ -72,15 +98,82 @@ public class DebesteScrapper implements Scrapper {
     lock.unlock();
   }
 
+
+  private Mono<Void> initEmptyOffsets() {
+    return Mono.fromRunnable(() -> {
+      lock.lock();
+
+      currentPage = 1;
+      endOffset = 0;
+      checkpointOffset = Integer.MIN_VALUE;
+
+      lock.unlock();
+    });
+  }
+
+  private Mono<Void> initFromOffset(DebesteOffset offset) {
+    return Mono.fromRunnable(() -> {
+      lock.lock();
+      currentPage = offset.isCommitted() ? 1 : offset.getCheckpointedPage();
+      checkpointOffset = offset.getCheckpointOffset();
+      endOffset = offset.getCommittedOffset();
+      lock.unlock();
+    });
+  }
+
   private void schedulePageFetch() {
-    addToChain(puller.pullAsString(host + "/" + currentPage++)
-        .map((page) -> {
-          return DebesteHtmlParser.parseMemesFromPage(host, page);
+    addToChain(puller.pullRaw(host + "/" + currentPage)
+        .<List<MemeInfo>>flatMap(clientResponse -> {
+          if (clientResponse.statusCode().is3xxRedirection()) {
+            endReached = true;
+            return Mono.just(Collections.emptyList());
+          }
+
+          return clientResponse
+              .bodyToMono(String.class)
+              .map((page) -> {
+                return DebesteHtmlParser.parseMemesFromPage(host, page);
+              });
         })
         .handle((list, sink) -> {
           blockingQueue.addAll(list);
+          for (MemeInfo info : list) {
+            maxPageOffset = Math.max(maxPageOffset, info.getId());
+          }
           sink.complete();
-        }));
+        })
+        .then(processScrappingStep())
+    );
+  }
+
+  private Mono<Void> processScrappingStep() {
+    return Mono.create((sink) -> {
+      DebesteOffset offset = new DebesteOffset();
+      offset.setCheckpointedPage(currentPage);
+
+      if (endReached || maxPageOffset < endOffset) {
+        offset.setCommitted(true);
+        offset.setCommittedOffset(checkpointOffset);
+        offset.setCheckpointOffset(checkpointOffset);
+
+        endOffset = checkpointOffset;
+        currentPage = 1;
+        offsetService
+            .saveOffset("debeste", offset)
+            .delayElement(Duration.ofSeconds(10))
+            .subscribe(sink::success);
+      } else {
+        checkpointOffset = Math.max(checkpointOffset, maxPageOffset);
+        offset.setCommitted(false);
+        offset.setCommittedOffset(endOffset);
+        offset.setCheckpointOffset(checkpointOffset);
+        currentPage++;
+        offsetService
+            .saveOffset("debeste", offset)
+            .subscribe(sink::success);
+      }
+      maxPageOffset = Integer.MIN_VALUE;
+    }).then();
   }
 
   private void scheduleDrain() {

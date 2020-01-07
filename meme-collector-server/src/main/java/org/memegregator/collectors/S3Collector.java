@@ -3,6 +3,7 @@ package org.memegregator.collectors;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Tags;
+import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.memegregator.entity.MemeInfo;
 import org.memegregator.entity.content.ExternalImageContent;
@@ -101,16 +102,16 @@ public class S3Collector implements Collector {
 
       Mono<ClientResponse> buffer = streamFileByUrl(imageContent.getImageUrl());
 
-      String s3Key = String.format("image/%s/%s.%s", meme.getProvider(), meme.getId(),
-          getExtension(imageContent.getImageUrl()));
+      String s3Key = String
+          .format("%s.%s", getUid(), getExtension(((ExternalImageContent) content).getImageUrl()));
 
       result = contentStorage
           .pushData(s3Key, buffer)
-          .then(Mono.fromCallable(() -> {
-            S3ImageContent s3ImageContent = new S3ImageContent(s3Key);
+          .map(hash -> {
+            S3ImageContent s3ImageContent = new S3ImageContent(hash, s3Key);
             return new MemeInfo(meme.getId(), meme.getProvider(), meme.getTitle(), s3ImageContent,
                 meme.getRating());
-          }));
+          });
     }
 
     if (content instanceof ExternalVideoContent) {
@@ -122,21 +123,21 @@ public class S3Collector implements Collector {
       Mono<ClientResponse> posterBuffer = streamFileByUrl(posterUrl);
       Mono<ClientResponse> videoBuffer = streamFileByUrl(videoUrl);
 
-      String posterKey = String
-          .format("poster/%s/%s.%s", meme.getProvider(), meme.getId(), getExtension(posterUrl));
-      String videoKey = String
-          .format("video/%s/%s.%s", meme.getProvider(), meme.getId(), getExtension(videoUrl));
+      String uid = getUid();
 
-      Mono<Void> posterUpload = contentStorage.pushData(posterKey, posterBuffer);
-      Mono<Void> videoUpload = contentStorage.pushData(videoKey, videoBuffer);
+      String posterKey = String.format("%s.%s", uid, getExtension(posterUrl));
+      String videoKey = String.format("%s.%s", uid, getExtension(videoUrl));
+
+      Mono<String> posterUpload = contentStorage.pushData(posterKey, posterBuffer);
+      Mono<String> videoUpload = contentStorage.pushData(videoKey, videoBuffer);
 
       result = Mono
-          .when(posterUpload, videoUpload)
-          .then(Mono.fromCallable(() -> {
-            S3VideoContent s3VideoContent = new S3VideoContent(videoKey, posterKey);
+          .zip(posterUpload, videoUpload)
+          .map(tuple -> {
+            S3VideoContent s3VideoContent = new S3VideoContent(tuple.getT2(), videoKey, posterKey);
             return new MemeInfo(meme.getId(), meme.getProvider(), meme.getTitle(), s3VideoContent,
                 meme.getRating());
-          }));
+          });
     }
 
     return result
@@ -161,5 +162,9 @@ public class S3Collector implements Collector {
 
   private Mono<ClientResponse> streamFileByUrl(String url) {
     return puller.pullRaw(url);
+  }
+
+  private String getUid() {
+    return UUID.randomUUID().toString().replaceAll("-", "");
   }
 }

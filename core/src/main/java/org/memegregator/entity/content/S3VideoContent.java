@@ -4,12 +4,18 @@ import java.util.Objects;
 
 public class S3VideoContent implements InternalMemeContent {
 
+  private final String hash;
   private final String fileKey;
   private final String posterKey;
 
-  public S3VideoContent(String fileKey, String posterKey) {
+  public S3VideoContent(String hash, String fileKey, String posterKey) {
+    this.hash = hash;
     this.fileKey = fileKey;
     this.posterKey = posterKey;
+  }
+
+  public String getHash() {
+    return hash;
   }
 
   public String getFileKey() {
@@ -29,12 +35,18 @@ public class S3VideoContent implements InternalMemeContent {
       return false;
     }
     S3VideoContent that = (S3VideoContent) o;
-    return Objects.equals(fileKey, that.fileKey) &&
+    return Objects.equals(hash, that.hash) &&
+        Objects.equals(fileKey, that.fileKey) &&
         Objects.equals(posterKey, that.posterKey);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(fileKey, posterKey);
+    return Objects.hash(hash, fileKey, posterKey);
+  }
+
+  @Override
+  public String contentHash() {
+    return hash;
   }
 }

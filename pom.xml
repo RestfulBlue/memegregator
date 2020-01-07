@@ -7,6 +7,7 @@
   <modules>
     <module>core</module>
     <module>meme-collector-server</module>
+    <module>meme-query-server</module>
   </modules>
   <parent>
     <groupId>org.springframework.boot</groupId>
