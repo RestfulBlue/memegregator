@@ -1,6 +1,14 @@
 package org.memegregator.entity.content;
 
+import org.memegregator.entity.MemeInfo;
+import org.memegregator.storage.ContentStorage;
+import org.memegregator.util.MemegregatorUtils;
+import org.springframework.web.reactive.function.client.ClientResponse;
+import reactor.core.publisher.Mono;
+
 import java.util.Objects;
+import java.util.UUID;
+import java.util.function.Function;
 
 public class ExternalImageContent implements ExternalMemeContent {
 
@@ -29,5 +37,23 @@ public class ExternalImageContent implements ExternalMemeContent {
   @Override
   public int hashCode() {
     return Objects.hash(imageUrl);
+  }
+
+  @Override
+  public Mono<InternalMemeContent> convertToInternal(
+      Function<String, Mono<ClientResponse>> fileStreamFunction, ContentStorage contentStorage) {
+
+    Mono<ClientResponse> stream = fileStreamFunction.apply(imageUrl);
+    String uid = UUID.randomUUID().toString().replaceAll("-", "");
+
+    String s3Key = String
+        .format("%s.%s", MemegregatorUtils.getUid(), MemegregatorUtils.getExtension(imageUrl));
+
+    return contentStorage
+        .pushData(s3Key, stream)
+        .map(hash -> {
+          S3ImageContent s3ImageContent = new S3ImageContent(hash, s3Key);
+          return s3ImageContent;
+        });
   }
 }

@@ -3,24 +3,17 @@ package org.memegregator.collectors;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Tags;
-import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.memegregator.entity.MemeInfo;
-import org.memegregator.entity.content.ExternalImageContent;
-import org.memegregator.entity.content.ExternalVideoContent;
+import org.memegregator.entity.content.ExternalMemeContent;
 import org.memegregator.entity.content.InternalMemeContent;
 import org.memegregator.entity.content.MemeContent;
-import org.memegregator.entity.content.S3ImageContent;
-import org.memegregator.entity.content.S3VideoContent;
 import org.memegregator.puller.WebClientPuller;
 import org.memegregator.storage.ContentStorage;
-import org.reactivestreams.Subscription;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
-import org.springframework.web.reactive.function.client.ClientResponse;
-import reactor.core.publisher.BaseSubscriber;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
@@ -53,118 +46,33 @@ public class S3Collector implements Collector {
 
   @Override
   public Flux<MemeInfo> collectMemes(Flux<MemeInfo> memesStream) {
+    return memesStream.flatMap(meme -> {
+      inProgressGauge.incrementAndGet();
+      receivedCounter.increment();
 
-    return Flux.create(sink -> {
-      memesStream.subscribe(new BaseSubscriber<MemeInfo>() {
+      MemeContent content = meme.getContent();
+      if (content instanceof InternalMemeContent) {
+        return Mono.just(meme);
+      }
 
-        Subscription subscription;
+      if (!(content instanceof ExternalMemeContent)) {
+        return Mono.empty();
+      }
 
-        @Override
-        protected void hookOnSubscribe(Subscription subscription) {
-          this.subscription = subscription;
-          this.subscription.request(256);
-        }
+      ExternalMemeContent externalContent = (ExternalMemeContent) content;
 
-        @Override
-        protected void hookOnNext(MemeInfo value) {
-          processMeme(value)
-              .handle((memeInfo, synchronousSink) -> {
-                sink.next(memeInfo);
-              })
-              .doFinally((signalType) -> {
-                subscription.request(1);
-              })
-              .subscribe();
-
-        }
-
-        @Override
-        protected void hookOnCancel() {
-
-        }
-      });
+      return externalContent
+          .convertToInternal(puller::pullRaw, contentStorage)
+          .map(internalContent -> {
+            inProgressGauge.decrementAndGet();
+            processedCounter.increment();
+            return new MemeInfo(meme.getId(), meme.getProvider(), meme.getTitle(), internalContent,
+                meme.getRating());
+          })
+          .onErrorResume(error -> {
+            return Mono.empty();
+          });
     });
-
   }
 
-  private Mono<MemeInfo> processMeme(MemeInfo meme) {
-    Mono<MemeInfo> result = Mono.empty();
-    inProgressGauge.incrementAndGet();
-    receivedCounter.increment();
-
-    MemeContent content = meme.getContent();
-    if (content instanceof InternalMemeContent) {
-      return Mono.just(meme);
-    }
-
-    if (content instanceof ExternalImageContent) {
-      ExternalImageContent imageContent = (ExternalImageContent) content;
-
-      Mono<ClientResponse> buffer = streamFileByUrl(imageContent.getImageUrl());
-
-      String s3Key = String
-          .format("%s.%s", getUid(), getExtension(((ExternalImageContent) content).getImageUrl()));
-
-      result = contentStorage
-          .pushData(s3Key, buffer)
-          .map(hash -> {
-            S3ImageContent s3ImageContent = new S3ImageContent(hash, s3Key);
-            return new MemeInfo(meme.getId(), meme.getProvider(), meme.getTitle(), s3ImageContent,
-                meme.getRating());
-          });
-    }
-
-    if (content instanceof ExternalVideoContent) {
-      ExternalVideoContent videoContent = (ExternalVideoContent) content;
-
-      String posterUrl = videoContent.getPosterUrl();
-      String videoUrl = videoContent.getVideoUrl();
-
-      Mono<ClientResponse> posterBuffer = streamFileByUrl(posterUrl);
-      Mono<ClientResponse> videoBuffer = streamFileByUrl(videoUrl);
-
-      String uid = getUid();
-
-      String posterKey = String.format("%s.%s", uid, getExtension(posterUrl));
-      String videoKey = String.format("%s.%s", uid, getExtension(videoUrl));
-
-      Mono<String> posterUpload = contentStorage.pushData(posterKey, posterBuffer);
-      Mono<String> videoUpload = contentStorage.pushData(videoKey, videoBuffer);
-
-      result = Mono
-          .zip(posterUpload, videoUpload)
-          .map(tuple -> {
-            S3VideoContent s3VideoContent = new S3VideoContent(tuple.getT2(), videoKey, posterKey);
-            return new MemeInfo(meme.getId(), meme.getProvider(), meme.getTitle(), s3VideoContent,
-                meme.getRating());
-          });
-    }
-
-    return result
-        .map(info -> {
-          inProgressGauge.decrementAndGet();
-          processedCounter.increment();
-          return info;
-        })
-        .onErrorResume(e -> {
-          LOGGER.error("Error while trying to upload meme : {}", e);
-          inProgressGauge.decrementAndGet();
-          errorsCounter.increment();
-          return Mono.empty();
-        });
-
-  }
-
-  private String getExtension(String url) {
-    String[] parts = url.split("\\.");
-    return parts[parts.length - 1];
-  }
-
-  private Mono<ClientResponse> streamFileByUrl(String url) {
-    return puller.pullRaw(url);
-  }
-
-  private String getUid() {
-    return UUID.randomUUID().toString().replaceAll("-", "");
-  }
 }

@@ -8,6 +8,7 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.locks.ReentrantLock;
 import org.memegregator.entity.DebesteOffset;
 import org.memegregator.entity.MemeInfo;
+import org.memegregator.puller.HttpPuller;
 import org.memegregator.puller.WebClientPuller;
 import org.memegregator.scrappers.Scrapper;
 import org.memegregator.service.OffsetService;
@@ -27,7 +28,7 @@ import reactor.core.scheduler.Schedulers;
 public class DebesteScrapper implements Scrapper {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(DebesteScrapper.class);
-  private final WebClientPuller puller;
+  private final HttpPuller puller;
 
   private final OffsetService offsetService;
   private final String host;
@@ -50,11 +51,12 @@ public class DebesteScrapper implements Scrapper {
   private volatile boolean endReached = false;
 
   @Autowired
-  public DebesteScrapper(OffsetService offsetService,
+  public DebesteScrapper(HttpPuller httpPuller,
+      OffsetService offsetService,
       @Value("${host:http://debeste.de}") String host) {
     this.host = host;
     this.offsetService = offsetService;
-    this.puller = new WebClientPuller();
+    this.puller = httpPuller;
 
     DebesteOffset defaultOffset = new DebesteOffset();
     defaultOffset.setCheckpointOffset(0);

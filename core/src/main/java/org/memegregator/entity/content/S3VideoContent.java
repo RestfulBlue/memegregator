@@ -1,5 +1,8 @@
 package org.memegregator.entity.content;
 
+import org.memegregator.storage.ContentStorage;
+import reactor.core.publisher.Mono;
+
 import java.util.Objects;
 
 public class S3VideoContent implements InternalMemeContent {
@@ -46,7 +49,10 @@ public class S3VideoContent implements InternalMemeContent {
   }
 
   @Override
-  public String contentHash() {
-    return hash;
+  public Mono<Void> dropFromStorage(ContentStorage contentStorage) {
+    return Mono.when(
+            contentStorage.dropData(fileKey),
+            contentStorage.dropData(posterKey)
+    );
   }
 }
