@@ -2,7 +2,7 @@ package org.memegregator.scrappers;
 
 import com.fasterxml.jackson.annotation.JsonSubTypes;
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
-import org.memegregator.entity.MemeInfo;
+import org.memegregator.entity.info.MemeInfo;
 import org.memegregator.scrappers.debeste.DebesteScrapper;
 import reactor.core.publisher.Flux;
 

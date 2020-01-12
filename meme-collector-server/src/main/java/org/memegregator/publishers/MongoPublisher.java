@@ -1,6 +1,6 @@
 package org.memegregator.publishers;
 
-import org.memegregator.entity.MemeInfo;
+import org.memegregator.entity.info.MemeInfo;
 import org.memegregator.entity.content.InternalMemeContent;
 import org.memegregator.service.MemeService;
 import org.memegregator.storage.ContentStorage;

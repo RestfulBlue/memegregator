@@ -6,17 +6,20 @@ import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
-import org.memegregator.entity.MemeInfo;
+import org.memegregator.entity.info.MemeInfo;
 import org.memegregator.entity.content.ExternalImageContent;
 import org.memegregator.entity.content.ExternalVideoContent;
 import org.memegregator.entity.content.MemeContent;
+import reactor.util.function.Tuple2;
+import reactor.util.function.Tuples;
 
 public class DebesteHtmlParser {
 
-  public static List<MemeInfo> parseMemesFromPage(String host, String html){
+  public static Tuple2<Integer, List<MemeInfo>> parseMemesFromPage(String host, String html) {
     Document doc = Jsoup.parse(html);
     Elements boxs = doc.getElementById("content").getElementsByClass("box");
 
+    Integer maxId = 0;
     List<MemeInfo> infos = new ArrayList<>();
 
     for (Element element : boxs) {
@@ -68,10 +71,11 @@ public class DebesteHtmlParser {
         }
       }
 
-      infos.add(new MemeInfo(Integer.parseInt(id), "DEBESTE", title, content, rating));
+      infos.add(new MemeInfo(title, content, rating));
+      maxId = Math.max(maxId, Integer.parseInt(id));
     }
 
-    return infos;
+    return Tuples.of(maxId, infos);
   }
 
 }

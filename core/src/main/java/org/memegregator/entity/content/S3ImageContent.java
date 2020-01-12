@@ -1,5 +1,7 @@
 package org.memegregator.entity.content;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import org.memegregator.storage.ContentStorage;
 import reactor.core.publisher.Mono;
 
@@ -10,7 +12,8 @@ public class S3ImageContent implements InternalMemeContent {
   private final String hash;
   private final String imageKey;
 
-  public S3ImageContent(String hash, String imageKey) {
+  @JsonCreator
+  public S3ImageContent(@JsonProperty("hash") String hash,@JsonProperty("imageKey") String imageKey) {
     this.imageKey = imageKey;
     this.hash = hash;
   }
@@ -44,5 +47,10 @@ public class S3ImageContent implements InternalMemeContent {
   @Override
   public Mono<Void> dropFromStorage(ContentStorage storage) {
     return storage.dropData(imageKey);
+  }
+
+  @Override
+  public Mono<ApiMemeContent> convertToApiContent() {
+    return Mono.just(new ApiImageContent("/image/" + imageKey));
   }
 }

@@ -1,6 +1,5 @@
 package org.memegregator.entity.content;
 
-import org.memegregator.entity.MemeInfo;
 import org.memegregator.storage.ContentStorage;
 import org.memegregator.util.MemegregatorUtils;
 import org.springframework.web.reactive.function.client.ClientResponse;

@@ -7,4 +7,6 @@ public interface InternalMemeContent extends MemeContent {
 
   Mono<Void> dropFromStorage(ContentStorage contentStorage);
 
+  Mono<ApiMemeContent> convertToApiContent();
+
 }

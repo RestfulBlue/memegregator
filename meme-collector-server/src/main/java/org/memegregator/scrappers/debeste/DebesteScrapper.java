@@ -1,15 +1,13 @@
 package org.memegregator.scrappers.debeste;
 
 import java.time.Duration;
-import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.locks.ReentrantLock;
-import org.memegregator.entity.DebesteOffset;
-import org.memegregator.entity.MemeInfo;
+import org.memegregator.entity.info.MemeInfo;
+import org.memegregator.entity.offsets.DebesteOffset;
 import org.memegregator.puller.HttpPuller;
-import org.memegregator.puller.WebClientPuller;
 import org.memegregator.scrappers.Scrapper;
 import org.memegregator.service.OffsetService;
 import org.slf4j.Logger;
@@ -22,6 +20,7 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.FluxSink;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
+import reactor.util.function.Tuple2;
 
 @Component
 @Import(OffsetService.class)
@@ -100,19 +99,6 @@ public class DebesteScrapper implements Scrapper {
     lock.unlock();
   }
 
-
-  private Mono<Void> initEmptyOffsets() {
-    return Mono.fromRunnable(() -> {
-      lock.lock();
-
-      currentPage = 1;
-      endOffset = 0;
-      checkpointOffset = Integer.MIN_VALUE;
-
-      lock.unlock();
-    });
-  }
-
   private Mono<Void> initFromOffset(DebesteOffset offset) {
     return Mono.fromRunnable(() -> {
       lock.lock();
@@ -125,24 +111,23 @@ public class DebesteScrapper implements Scrapper {
 
   private void schedulePageFetch() {
     addToChain(puller.pullRaw(host + "/" + currentPage)
-        .<List<MemeInfo>>flatMap(clientResponse -> {
+        .<Tuple2<Integer, List<MemeInfo>>>flatMap(clientResponse -> {
           if (clientResponse.statusCode().is3xxRedirection()) {
             endReached = true;
-            return Mono.just(Collections.emptyList());
+            return Mono.empty();
           }
 
           return clientResponse
               .bodyToMono(String.class)
-              .map((page) -> {
-                return DebesteHtmlParser.parseMemesFromPage(host, page);
+              .handle((page, sink) -> {
+                Tuple2<Integer, List<MemeInfo>> parseResult = DebesteHtmlParser
+                    .parseMemesFromPage(host, page);
+
+
+                blockingQueue.addAll(parseResult.getT2());
+                maxPageOffset = Math.max(maxPageOffset, parseResult.getT1());
+                sink.complete();
               });
-        })
-        .handle((list, sink) -> {
-          blockingQueue.addAll(list);
-          for (MemeInfo info : list) {
-            maxPageOffset = Math.max(maxPageOffset, info.getId());
-          }
-          sink.complete();
         })
         .then(processScrappingStep())
     );
@@ -203,7 +188,7 @@ public class DebesteScrapper implements Scrapper {
 
   @Override
   public Flux<MemeInfo> getScrappingStream() {
-    return Flux.<MemeInfo>create(sink -> {
+    return Flux.create(sink -> {
       this.memeSink = sink;
       sink.onRequest(n -> {
         addToChain(Mono.fromRunnable(() -> {

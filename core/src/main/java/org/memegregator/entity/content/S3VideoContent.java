@@ -1,9 +1,10 @@
 package org.memegregator.entity.content;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import java.util.Objects;
 import org.memegregator.storage.ContentStorage;
 import reactor.core.publisher.Mono;
-
-import java.util.Objects;
 
 public class S3VideoContent implements InternalMemeContent {
 
@@ -11,7 +12,9 @@ public class S3VideoContent implements InternalMemeContent {
   private final String fileKey;
   private final String posterKey;
 
-  public S3VideoContent(String hash, String fileKey, String posterKey) {
+  @JsonCreator
+  public S3VideoContent(@JsonProperty("hash") String hash, @JsonProperty("fileKey") String fileKey,
+      @JsonProperty("posterKey") String posterKey) {
     this.hash = hash;
     this.fileKey = fileKey;
     this.posterKey = posterKey;
@@ -51,8 +54,13 @@ public class S3VideoContent implements InternalMemeContent {
   @Override
   public Mono<Void> dropFromStorage(ContentStorage contentStorage) {
     return Mono.when(
-            contentStorage.dropData(fileKey),
-            contentStorage.dropData(posterKey)
+        contentStorage.dropData(fileKey),
+        contentStorage.dropData(posterKey)
     );
+  }
+
+  @Override
+  public Mono<ApiMemeContent> convertToApiContent() {
+    return Mono.just(new ApiVideoContent("/image/" + posterKey, "/video/" + fileKey));
   }
 }

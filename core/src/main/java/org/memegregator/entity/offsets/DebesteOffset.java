@@ -1,4 +1,4 @@
-package org.memegregator.entity;
+package org.memegregator.entity.offsets;
 
 import java.util.Objects;
 

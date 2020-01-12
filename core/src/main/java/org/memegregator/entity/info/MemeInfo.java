@@ -1,30 +1,18 @@
-package org.memegregator.entity;
+package org.memegregator.entity.info;
 
 import java.util.Objects;
 import org.memegregator.entity.content.MemeContent;
 
 public class MemeInfo {
 
-  private final int id;
-  private final String provider;
   private final String title;
   private final MemeContent content;
   private final int rating;
 
-  public MemeInfo(int id, String provider, String title, MemeContent content, int rating) {
-    this.id = id;
-    this.provider = provider;
+  public MemeInfo(String title, MemeContent content, int rating) {
     this.title = title;
     this.content = content;
     this.rating = rating;
-  }
-
-  public int getId() {
-    return id;
-  }
-
-  public String getProvider() {
-    return provider;
   }
 
   public String getTitle() {
@@ -48,15 +36,13 @@ public class MemeInfo {
       return false;
     }
     MemeInfo memeInfo = (MemeInfo) o;
-    return id == memeInfo.id &&
-        rating == memeInfo.rating &&
-        Objects.equals(provider, memeInfo.provider) &&
+    return rating == memeInfo.rating &&
         Objects.equals(title, memeInfo.title) &&
         Objects.equals(content, memeInfo.content);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(id, provider, title, content, rating);
+    return Objects.hash(title, content, rating);
   }
 }

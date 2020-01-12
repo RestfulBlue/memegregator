@@ -1,6 +1,6 @@
 package org.memegregator.collectors;
 
-import org.memegregator.entity.MemeInfo;
+import org.memegregator.entity.info.MemeInfo;
 import reactor.core.publisher.Flux;
 
 

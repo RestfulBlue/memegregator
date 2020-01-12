@@ -5,13 +5,11 @@ import static com.mongodb.client.model.Filters.eq;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.mongodb.client.model.ReplaceOptions;
-import com.mongodb.client.model.UpdateOptions;
 import com.mongodb.client.result.UpdateResult;
-import com.mongodb.reactivestreams.client.MongoClient;
 import com.mongodb.reactivestreams.client.MongoDatabase;
 import org.bson.Document;
 import org.memegregator.configuration.MongoConfiguration;
-import org.memegregator.entity.ScrappingOffset;
+import org.memegregator.entity.offsets.ScrappingOffset;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Import;
@@ -25,15 +23,12 @@ public class OffsetService {
   private final ObjectMapper objectMapper = new ObjectMapper();
   private final String offsetCollection;
   private final MongoDatabase database;
-  private final MongoClient mongoClient;
 
   @Autowired
   public OffsetService(
-      MongoClient mongoClient,
       MongoDatabase mongoDatabase,
       @Value("${mongo.offsetCollection:offsets}") String offsetCollection) {
     this.database = mongoDatabase;
-    this.mongoClient = mongoClient;
     this.offsetCollection = offsetCollection;
   }
 

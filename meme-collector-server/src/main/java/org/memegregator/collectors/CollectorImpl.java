@@ -4,7 +4,7 @@ import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Tags;
 import java.util.concurrent.atomic.AtomicInteger;
-import org.memegregator.entity.MemeInfo;
+import org.memegregator.entity.info.MemeInfo;
 import org.memegregator.entity.content.ExternalMemeContent;
 import org.memegregator.entity.content.InternalMemeContent;
 import org.memegregator.entity.content.MemeContent;
@@ -18,13 +18,13 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 @Component
-public class S3Collector implements Collector {
+public class CollectorImpl implements Collector {
 
-  private static final Logger LOGGER = LoggerFactory.getLogger(S3Collector.class);
+  private static final Logger LOGGER = LoggerFactory.getLogger(CollectorImpl.class);
   private final ContentStorage contentStorage;
   private final WebClientPuller puller;
 
-  private static final String METRIC_NAME = "S3Collector";
+  private static final String METRIC_NAME = "CollectorImpl";
 
   private final AtomicInteger inProgressGauge;
   private final Counter receivedCounter;
@@ -32,7 +32,7 @@ public class S3Collector implements Collector {
   private final Counter errorsCounter;
 
   @Autowired
-  public S3Collector(ContentStorage contentStorage, MeterRegistry registry) {
+  public CollectorImpl(ContentStorage contentStorage, MeterRegistry registry) {
     this.contentStorage = contentStorage;
     this.puller = new WebClientPuller();
 
@@ -66,8 +66,7 @@ public class S3Collector implements Collector {
           .map(internalContent -> {
             inProgressGauge.decrementAndGet();
             processedCounter.increment();
-            return new MemeInfo(meme.getId(), meme.getProvider(), meme.getTitle(), internalContent,
-                meme.getRating());
+            return new MemeInfo(meme.getTitle(), internalContent, meme.getRating());
           })
           .onErrorResume(error -> {
             return Mono.empty();
