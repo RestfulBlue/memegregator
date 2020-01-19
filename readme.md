@@ -13,7 +13,7 @@ https://funcodechallenge.com/task
 
 1. Поддерживаются видео и пикчи
 1. Весь сервис полностью неблокирующий и основывается на WebFlux.
-Используя всего 1 ядро + 250 мб хипа ( потенциально ещё ~50мб оффхипа, т.к. нетти создаёт буферы в оффхипе)
+Используя всего 1 ядро + 250 мб хипа ( ещё ~50мб оффхипа, т.к. нетти создаёт буферы в оффхипе и тд)
 полностью утилизируется сеть, высасывая мемы со скоростью 368 мбит/с (https://ibb.co/wrXYK6B)
 1. Минимальная буферизация в памяти, обеспечивая максимально потоковую обработку поверх http.
 Для этого обеспечивается асинхронный клиент S3 с поддержкой backpressure ( см. S3ContentStorage)
@@ -70,26 +70,32 @@ https://funcodechallenge.com/task
   * Получаем хедеры, выдаём content-length клиенту и потоково выдаём тело
   ( буферизации в памяти по минимуму + backpressure)
 
+Весь функционал на просмотр видео работает как минимум в хроме( используя html тег video), поддерживая перемотку и тд.
 
+## Метрики
+Метрики приложения на текущий момент выдаются для jmx и для prometheus
+В случае прометеуса они доступны по пути /actuator/prometheus
+К сожелению очень мало времени и выводил туда в основном когда искал где что задыхается
 
-## О том насколько всё завершено
-В целом всё работает, но до продакшен реди приложения тут ещё очень далеко.
-На создание полностью готового приложения со всеми метриками/логами/трейсингом/упаковкой,
- полностью покрытым различными тестами и описанием сваггер ендпоинтов нужно много времени и совмещать
- с fulltime работой крайне сложно. Но так или иначе я всё равно решил это отправить ( как никак все выхи просидел разбираясь со стеком :D )
+# Хелсчеки
+Доступны по пути /actuator/health
+
+## Чего не хватает
 Чего тут нет, но то как это должно быть :
-* Метрики. Они на самом деле в некоторой степени есть, в основном те, которые я использовал для определения
-  где что тормозит/забивает хип. Используется micrometer, выводится в jmx.
-  Чтобы вывести для прометеуса нужно просто добавить регистр prometheus в мавен зависимость.
 * OpenApi. Тут пишем json и выдаём его на одном из каких-нибудь endpoint . Для spring mvc ещё есть кашерный springfox, но для webflux он пока что не поддердживается.
-* Docker образа
 * Тестов. Тут всё просто, что-то мокаем и тестируем большинство классов юнит тестами. Оба сервиса так же легко тестируются интеграционно,
 для meme query в спринге ещё максимально просто запустить полноценный сервис внутри тестов
+
+Так же из-за нехватки времени в приложении остаётся много захардкоженных штук
 
 
 ## Запуск из IDE
 При клонировании репы и открытии в IDEA сразу будут доступны две зашаренные конфигурации запуска.
+Так же есть 2 конфигурации для сборки и запуска непосредственно контейнеров
 Нужно только заполнить параметры в /configuration/collector.properties и /configuration/query.properties
+В случае настройки конфигураций для докера, там нужно вписать тоже самое в env переменных.
+В таком случае имя параметра пишется капсом, точки заменяются на подчёркивание
+aws.secretKey => AWS_SECRETKEY="hohohaha"
 
 ## Параметры для запуска
 Параметров не так много :
@@ -107,10 +113,19 @@ mongo.databaseName=memegregator
 mongo.offsetCollection=offsets
 # collection with metadata
 mongo.memeCollection=memes
+
+
+#Metrics related configurations
+management.endpoint.metrics.enabled=true
+management.endpoints.web.exposure.include=*
+management.endpoint.prometheus.enabled=true
+management.metrics.export.prometheus.enabled=true
 ```
 
+## Индексы
+В монго для таблицы с мета информацией мемасов(mongo.memeCollection) должен быть уникальный индекс на content.hash. Его нужно создать в ручную
+
 ## Запуск вне IDE
-Т.к. времени упаковать в докер не осталось, запустить можно используя только традиционные способы
 1) Заполняем конфиги
 2) Собираем проект , на выходе в target директории получаем 2 jarника
 3) Запускаем каждый из них. Тут в целом всё дефолтно
@@ -126,3 +141,51 @@ java -jar meme-query-server-0.0.1.jar -Xmx250m -Xms250m -XX:+UseG1GC --spring.co
 ```
 
 Всё основывается на конфигурациях спринга и все параметры можно передать так же напрямую, либо через environment переменные
+
+
+## Запуск в докерах
+Все параметры передаются через environment переменные, например :
+
+В папках meme-collector-server и meme-query-server находятся два соотвествующих файла.
+Предполагается что сборка запускается из этих папок
+Так же нужно проставить переносы строк в конце в зависимости от вашей ОС =)
+### Query Server
+```
+cd meme-query-server
+
+docker build -t memegregator/query-server:latest .
+&& docker run
+-p 8080:8080
+--env MONGO_CONNECTIONSTRING=mongodb://host.docker.internal:27017
+--env MONGO_DATABASENAME=memegregator
+--env AWS_SECRETKEY=YOUSUPERSECRETKEY
+--env AWS_ACCESSKEY=YOURSUPERACCESSKEY
+--env S3_BUCKETNAME=memegregator-indexing
+--env MANAGEMENT_ENDPOINT_METRICS_ENABLED=true
+--env MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE=*
+--env MANAGEMENT_ENDPOINT_PROMETHEUS_ENABLED=true
+--env MANAGEMENT_METRICS_EXPORT_PROMETHEUS_ENABLED=true
+--name memegregator-query-server
+memegregator/query-server:latest
+```
+
+
+### Collector Server
+```
+cd meme-collector-server
+
+docker build -t memegregator/collector-server:latest .
+&& docker run
+-p 8081:8081
+--env MONGO_CONNECTIONSTRING=mongodb://host.docker.internal:27017
+--env MONGO_DATABASENAME=memegregator
+--env AWS_SECRETKEY=YOURSUPERSECRETKEY
+--env AWS_ACCESSKEY=YOURSUPERACCESSKEY
+--env S3_BUCKETNAME=memegregator-indexing
+--env MANAGEMENT_ENDPOINT_METRICS_ENABLED=true
+--env MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE=*
+--env MANAGEMENT_ENDPOINT_PROMETHEUS_ENABLED=true
+--env MANAGEMENT_METRICS_EXPORT_PROMETHEUS_ENABLED=true
+--name memegregator-collector-server
+memegregator/collector-server:latest
+```

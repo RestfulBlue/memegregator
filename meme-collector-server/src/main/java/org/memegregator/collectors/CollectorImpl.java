@@ -24,7 +24,7 @@ public class CollectorImpl implements Collector {
   private final ContentStorage contentStorage;
   private final WebClientPuller puller;
 
-  private static final String METRIC_NAME = "CollectorImpl";
+  private static final String METRIC_NAME = "CollectorMetrics";
 
   private final AtomicInteger inProgressGauge;
   private final Counter receivedCounter;
